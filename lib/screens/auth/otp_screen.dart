@@ -1,5 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-// import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
@@ -27,19 +28,26 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     super.dispose();
   }
 
-  void _verify() {
+  Future<void> _verify() async {
     final phone = ref.read(phoneProvider);
     final otp = _controllers.map((c) => c.text).join();
-    final success = ref.read(authProvider.notifier).login(phone, otp);
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid number or code. Try again.'),
-          backgroundColor: Color(0xFFB00020),
-        ),
-      );
-    }
+    final success = await ref.read(authProvider.notifier).login(phone, otp);
+
     // On success, GoRouter redirect fires automatically based on user role
+    if (success || !mounted) return;
+
+    // Dev-only OTP bypass: remove when real SMS login is added.
+    // kDebugMode is false in release builds, so they never reach this.
+    if (kDebugMode) {
+      context.go('/role-select');
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Invalid number or code. Try again.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   @override
@@ -76,10 +84,17 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
             Text(
               phone.isEmpty
                   ? 'Enter the 4-digit code'
-                  : 'Code sent to +94 $phone',
+                  : 'Enter the code for +94 ${phone.replaceFirst(RegExp(r'^0'), '')}',
               style:
                   const TextStyle(color: AppColors.textSecondary, fontSize: 15),
             ),
+            if (kDebugMode) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Dev mode: no SMS is sent. Any code works.',
+                style: TextStyle(color: AppColors.statusPending, fontSize: 13),
+              ),
+            ],
             const SizedBox(height: 40),
             // OTP boxes
             Row(

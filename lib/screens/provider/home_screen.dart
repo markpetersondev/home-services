@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/bookings_provider.dart';
 import '../../providers/users_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/price_dialog.dart';
 import '../../widgets/status_badge.dart';
 
 class ProviderHomeScreen extends ConsumerStatefulWidget {
@@ -27,8 +28,10 @@ class _ProviderHomeScreenState extends ConsumerState<ProviderHomeScreen> {
     final isOnline = user.isOnline;
     final incomingJobs = ref.watch(
       providerIncomingJobsProvider((
+        user.id,
         user.serviceType ?? '',
         user.areaCovered ?? '',
+        isOnline,
       )),
     );
     final myJobs = ref.watch(providerMyJobsProvider(user.id));
@@ -217,12 +220,14 @@ class _ProviderHomeScreenState extends ConsumerState<ProviderHomeScreen> {
             ),
 
             if (incomingJobs.isEmpty)
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   child: Text(
-                    'No incoming requests right now.',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    isOnline
+                        ? 'No incoming requests right now.'
+                        : "You're offline. Go online to receive requests.",
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
               )
@@ -322,10 +327,29 @@ class _IncomingCard extends ConsumerWidget {
             children: [
               const Text('📍', style: TextStyle(fontSize: 13)),
               const SizedBox(width: 4),
-              Text(
-                booking.address,
-                style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13),
+              Expanded(
+                child: Text(
+                  booking.address,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined,
+                  color: AppColors.textSecondary, size: 13),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  booking.formattedDate,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 13),
+                ),
               ),
             ],
           ),
@@ -336,10 +360,13 @@ class _IncomingCard extends ConsumerWidget {
                 const Icon(Icons.person_outline,
                     color: AppColors.textSecondary, size: 13),
                 const SizedBox(width: 4),
-                Text(
-                  customer.name,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
+                Expanded(
+                  child: Text(
+                    customer.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
+                  ),
                 ),
               ],
             ),
@@ -351,8 +378,7 @@ class _IncomingCard extends ConsumerWidget {
                 child: SizedBox(
                   height: 40,
                   child: ElevatedButton(
-                    onPressed: () =>
-                        _showAcceptDialog(context, ref, booking.id),
+                    onPressed: () => _accept(context, ref),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                       foregroundColor: Colors.black,
@@ -376,21 +402,7 @@ class _IncomingCard extends ConsumerWidget {
                 child: SizedBox(
                   height: 40,
                   child: OutlinedButton(
-                    onPressed: () {
-                      ref
-                          .read(bookingsProvider.notifier)
-                          .declineBooking(booking.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Job declined.',
-                            style:
-                                TextStyle(color: AppColors.textPrimary),
-                          ),
-                          backgroundColor: AppColors.statusPendingBg,
-                        ),
-                      );
-                    },
+                    onPressed: () => _decline(context, ref),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
                       side: const BorderSide(color: AppColors.border),
@@ -415,80 +427,42 @@ class _IncomingCard extends ConsumerWidget {
     );
   }
 
-  void _showAcceptDialog(
-      BuildContext context, WidgetRef ref, int bookingId) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Set Job Price',
-          style: TextStyle(color: AppColors.textPrimary),
+  // This card leaves the list once the job is accepted or declined, so its
+  // context can't be used afterwards. Capture what's needed up front.
+  Future<void> _accept(BuildContext context, WidgetRef ref) async {
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final user = ref.read(currentUserProvider);
+    final bookings = ref.read(bookingsProvider.notifier);
+    if (user == null) return;
+
+    final price = await showSetPriceDialog(context);
+    if (price == null) return;
+
+    final accepted = await bookings.acceptBooking(booking.id, user.id, price);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          accepted ? 'Job accepted!' : 'This job is no longer available.',
         ),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'e.g. 3500',
-            hintStyle:
-                const TextStyle(color: AppColors.textSecondary),
-            prefixText: 'Rs. ',
-            prefixStyle:
-                const TextStyle(color: AppColors.textSecondary),
-            filled: true,
-            fillColor: AppColors.background,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: AppColors.primary, width: 1.5),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style:
-                    TextStyle(color: AppColors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () {
-              final price = double.tryParse(ctrl.text);
-              if (price == null) return;
-              final user = ref.read(currentUserProvider);
-              if (user == null) return;
-              ref
-                  .read(bookingsProvider.notifier)
-                  .acceptBooking(bookingId, user.id, price);
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Job accepted!'),
-                  backgroundColor: Color(0xFF1B8A6B),
-                ),
-              );
-              context.push('/provider/job-detail',
-                  extra: bookingId);
-            },
-            child: const Text('Confirm',
-                style: TextStyle(
-                    color: AppColors.statusInProgress)),
-          ),
-        ],
+        backgroundColor: accepted ? AppColors.success : AppColors.error,
+      ),
+    );
+    if (accepted) router.push('/provider/job-detail', extra: booking.id);
+  }
+
+  Future<void> _decline(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    await ref
+        .read(bookingsProvider.notifier)
+        .declineBooking(booking.id, user.id);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Job declined.'),
+        backgroundColor: AppColors.statusPendingBg,
       ),
     );
   }

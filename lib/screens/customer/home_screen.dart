@@ -64,7 +64,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                       ),
                     ),
                     IconButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Notifications are coming soon.'),
+                            backgroundColor: AppColors.primary,
+                          ),
+                        );
+                      },
                       icon: const Icon(
                         Icons.notifications_outlined,
                         color: AppColors.textPrimary,
@@ -103,7 +110,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Your ${activeBookings.first.serviceType.toLowerCase()} job is ${activeBookings.first.status == 'inProgress' ? 'in progress' : 'accepted'}!',
+                            activeBookings.length > 1
+                                ? 'You have ${activeBookings.length} active jobs.'
+                                : 'Your ${activeBookings.first.serviceType.toLowerCase()} job is ${activeBookings.first.status == 'inProgress' ? 'in progress' : 'accepted'}!',
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 13,
@@ -186,7 +195,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   crossAxisCount: 4,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: 0.9,
+                  mainAxisExtent: 96,
                 ),
               ),
             ),
@@ -281,10 +290,14 @@ class _ActiveJobCard extends ConsumerWidget {
                 const Icon(Icons.location_on_outlined,
                     color: AppColors.textSecondary, size: 14),
                 const SizedBox(width: 4),
-                Text(
-                  booking.address,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
+                Expanded(
+                  child: Text(
+                    booking.address,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
+                  ),
                 ),
               ],
             ),
@@ -295,13 +308,16 @@ class _ActiveJobCard extends ConsumerWidget {
                   const Icon(Icons.person_outline,
                       color: AppColors.textSecondary, size: 14),
                   const SizedBox(width: 4),
-                  Text(
-                    provider.name,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13),
+                  Expanded(
+                    child: Text(
+                      provider.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13),
+                    ),
                   ),
                   if (booking.formattedPrice != null) ...[
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text(
                       booking.formattedPrice!,
                       style: const TextStyle(

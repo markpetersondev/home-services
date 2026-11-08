@@ -12,6 +12,7 @@ class StatusBadge extends StatelessWidget {
       'inProgress' => ('In Progress', AppColors.statusInProgress, AppColors.statusInProgressBg),
       'accepted'   => ('Accepted',    AppColors.statusAccepted,   AppColors.statusAcceptedBg),
       'completed'  => ('Completed',   AppColors.statusCompleted,  AppColors.statusCompletedBg),
+      'cancelled'  => ('Cancelled',   AppColors.statusCancelled,  AppColors.statusCancelledBg),
       _            => ('Pending',     AppColors.statusPending,    AppColors.statusPendingBg),
     };
 

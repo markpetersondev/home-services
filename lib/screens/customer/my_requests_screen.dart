@@ -92,14 +92,16 @@ class _RequestCard extends StatelessWidget {
                 const Icon(Icons.calendar_today_outlined,
                     color: AppColors.textSecondary, size: 13),
                 const SizedBox(width: 5),
-                Text(
-                  booking.formattedDate,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
+                Expanded(
+                  child: Text(
+                    booking.formattedDate,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 if (booking.formattedPrice != null)
                   Text(
                     booking.formattedPrice!,

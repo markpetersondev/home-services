@@ -6,9 +6,10 @@ class Booking {
   final String address;
   final String description;
   final DateTime scheduledAt;
-  final String status; // 'pending', 'accepted', 'inProgress', 'completed'
+  final String status; // 'pending', 'accepted', 'inProgress', 'completed', 'cancelled'
   final double? price;
   final DateTime createdAt;
+  final List<int> declinedBy; // Providers who declined this booking
 
   const Booking({
     required this.id,
@@ -21,6 +22,7 @@ class Booking {
     required this.status,
     this.price,
     required this.createdAt,
+    this.declinedBy = const [],
   });
 
   Booking copyWith({
@@ -34,6 +36,7 @@ class Booking {
     String? status,
     double? price,
     DateTime? createdAt,
+    List<int>? declinedBy,
   }) {
     return Booking(
       id: id ?? this.id,
@@ -46,6 +49,7 @@ class Booking {
       status: status ?? this.status,
       price: price ?? this.price,
       createdAt: createdAt ?? this.createdAt,
+      declinedBy: declinedBy ?? this.declinedBy,
     );
   }
 

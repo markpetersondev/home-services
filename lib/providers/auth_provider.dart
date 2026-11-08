@@ -28,17 +28,11 @@ class AuthNotifier extends StateNotifier<AppUser?> {
   AuthNotifier(this._ref) : super(null);
 
   /// Returns true if a matching user was found and logged in.
-  bool login(String phone, String password) {
-    final users = _ref.read(usersProvider);
-    try {
-      final user = users.firstWhere(
-        (u) => u.phone == phone && u.password == password,
-      );
-      state = user;
-      return true;
-    } catch (_) {
-      return false;
-    }
+  Future<bool> login(String phone, String password) async {
+    final user = await _ref.read(userRepositoryProvider).login(phone, password);
+    if (user == null) return false;
+    state = user;
+    return true;
   }
 
   void logout() => state = null;

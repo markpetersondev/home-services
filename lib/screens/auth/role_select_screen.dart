@@ -28,7 +28,7 @@ class RoleSelectScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'You can always switch later',
+                'Choose how you want to continue',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 15,
@@ -37,17 +37,16 @@ class RoleSelectScreen extends ConsumerWidget {
               const SizedBox(height: 48),
               _RoleCard(
                 icon: Icons.person_outline,
-                iconBgColor: AppColors.primary,
+                iconBgColor: AppColors.statusInProgress,
                 title: 'I need a service',
-                subtitle:
-                    'Find skilled workers for your home repairs, cleaning, and more',
+                subtitle: 'Find skilled workers for your home repairs',
                 onTap: () =>
                     ref.read(authProvider.notifier).login('0701111111', '1234'),
               ),
               const SizedBox(height: 16),
               _RoleCard(
                 icon: Icons.build_outlined,
-                iconBgColor: const Color(0xFF2D6A4F),
+                iconBgColor: AppColors.statusCompleted,
                 title: 'I provide services',
                 subtitle:
                     'Join as a worker and start earning by helping people nearby',

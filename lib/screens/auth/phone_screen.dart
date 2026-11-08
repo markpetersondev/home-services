@@ -117,7 +117,10 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
                           hintText: 'Phone number',
                           hintStyle:
                               TextStyle(color: AppColors.textSecondary),
+                          filled: false,
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 17,

@@ -21,6 +21,9 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
   TimeOfDay? _selectedTime;
   final _addressCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  String? _addressError;
+  String? _dateTimeError;
+  String? _descError;
 
   @override
   void dispose() {
@@ -29,40 +32,46 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 60)),
-      builder: (ctx, child) => Theme(
+  Widget _pickerTheme(BuildContext ctx, Widget? child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
+            primary: AppColors.statusInProgress,
+            onPrimary: AppColors.background,
+            primaryContainer: AppColors.statusInProgress,
+            onPrimaryContainer: AppColors.background,
+            tertiaryContainer: AppColors.statusInProgress,
+            onTertiaryContainer: AppColors.background,
             surface: AppColors.card,
+            onSurface: AppColors.textPrimary,
           ),
         ),
         child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
-  }
+      );
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+  /// Asks for a date, then a time. Cancelling the date stops there.
+  Future<void> _pickDateAndTime() async {
+    FocusScope.of(context).unfocus();
+
+    final now = DateTime.now();
+    final date = await showDatePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.primary,
-            surface: AppColors.card,
-          ),
-        ),
-        child: child!,
-      ),
+      initialDate: _selectedDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+      builder: _pickerTheme,
     );
-    if (picked != null) setState(() => _selectedTime = picked);
+    if (date == null || !mounted) return;
+    setState(() {
+      _selectedDate = date;
+      _dateTimeError = null;
+    });
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+      builder: _pickerTheme,
+    );
+    if (time != null && mounted) setState(() => _selectedTime = time);
   }
 
   String get _dateTimeLabel {
@@ -81,12 +90,14 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
     return '$dateStr · $hour:$min $period';
   }
 
-  void _submit() {
-    final user = ref.read(authProvider);
-    if (user == null) return;
-
-    final date = _selectedDate ?? DateTime.now().add(const Duration(days: 1));
-    final time = _selectedTime ?? const TimeOfDay(hour: 10, minute: 0);
+  /// Returns the chosen date and time, or null if it's incomplete or past.
+  DateTime? _validatedDateTime() {
+    final date = _selectedDate;
+    final time = _selectedTime;
+    if (date == null || time == null) {
+      _dateTimeError = 'Choose a date and time';
+      return null;
+    }
     final scheduledAt = DateTime(
       date.year,
       date.month,
@@ -94,28 +105,46 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
       time.hour,
       time.minute,
     );
+    if (!scheduledAt.isAfter(DateTime.now())) {
+      _dateTimeError = 'Choose a time in the future';
+      return null;
+    }
+    _dateTimeError = null;
+    return scheduledAt;
+  }
 
-    ref.read(bookingsProvider.notifier).createBooking(
+  Future<void> _submit() async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+
+    final address = _addressCtrl.text.trim();
+    final description = _descCtrl.text.trim();
+
+    final scheduledAt = _validatedDateTime();
+    setState(() {
+      _addressError = address.isEmpty ? 'Enter the job address' : null;
+      _descError = description.isEmpty ? 'Describe the problem' : null;
+    });
+    if (scheduledAt == null || address.isEmpty || description.isEmpty) return;
+
+    await ref.read(bookingsProvider.notifier).createBooking(
           Booking(
-            id: 0, // assigned by notifier
+            id: 0, // assigned by the repository
             customerId: user.id,
             serviceType: widget.serviceType,
-            address: _addressCtrl.text.trim().isEmpty
-                ? user.address ?? 'Colombo'
-                : _addressCtrl.text.trim(),
-            description: _descCtrl.text.trim().isEmpty
-                ? '${widget.serviceType} service request'
-                : _descCtrl.text.trim(),
+            address: address,
+            description: description,
             scheduledAt: scheduledAt,
             status: 'pending',
             createdAt: DateTime.now(),
           ),
         );
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Request submitted!'),
-        backgroundColor: Color(0xFF238636),
+        backgroundColor: AppColors.success,
       ),
     );
     context.go('/customer/my-requests');
@@ -194,17 +223,22 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
               controller: _addressCtrl,
               style:
                   const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-              decoration: _inputDecor('e.g. No. 42, Galle Road, Colombo 03'),
+              onChanged: (_) {
+                if (_addressError != null) {
+                  setState(() => _addressError = null);
+                }
+              },
+              decoration: _inputDecor(
+                'e.g. No. 42, Galle Road, Colombo 03',
+                error: _addressError,
+              ),
             ),
 
             const SizedBox(height: 24),
             _fieldLabel('Date & Time'),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () async {
-                await _pickDate();
-                await _pickTime();
-              },
+              onTap: _pickDateAndTime,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
@@ -212,7 +246,11 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(
+                    color: _dateTimeError == null
+                        ? AppColors.border
+                        : Theme.of(context).colorScheme.error,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -233,15 +271,34 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
               ),
             ),
 
+            if (_dateTimeError != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 8),
+                child: Text(
+                  _dateTimeError!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+
             const SizedBox(height: 24),
             _fieldLabel('Job Description'),
             const SizedBox(height: 8),
             TextField(
               controller: _descCtrl,
               maxLines: 4,
+              textInputAction: TextInputAction.done,
               style:
                   const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-              decoration: _inputDecor('Describe the issue in detail…'),
+              onChanged: (_) {
+                if (_descError != null) setState(() => _descError = null);
+              },
+              decoration: _inputDecor(
+                'Describe the issue in detail…',
+                error: _descError,
+              ),
             ),
 
             const SizedBox(height: 36),
@@ -282,9 +339,10 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
         ),
       );
 
-  InputDecoration _inputDecor(String hint) =>
+  InputDecoration _inputDecor(String hint, {String? error}) =>
       InputDecoration(
         hintText: hint,
+        errorText: error,
         hintStyle: const TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.card,

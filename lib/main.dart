@@ -58,6 +58,7 @@ class FixNowwApp extends ConsumerWidget {
         ),
         snackBarTheme: const SnackBarThemeData(
           behavior: SnackBarBehavior.floating,
+          contentTextStyle: TextStyle(color: Colors.white, fontSize: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(10)),
           ),

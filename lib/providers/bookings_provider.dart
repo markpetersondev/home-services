@@ -1,117 +1,78 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/booking.dart';
+import '../repositories/booking_repository.dart';
+import 'users_provider.dart';
 
-final _initialBookings = <Booking>[
-  Booking(
-    id: 1,
-    customerId: 1, // Amaya
-    providerId: 3, // Kasun
-    serviceType: 'Plumbing',
-    address: 'Colombo 07',
-    description: 'Kitchen sink repair',
-    scheduledAt: DateTime(2026, 4, 16, 10, 0),
-    status: 'inProgress',
-    price: 3500.0,
-    createdAt: DateTime(2026, 4, 15),
-  ),
-  Booking(
-    id: 2,
-    customerId: 1, // Amaya
-    serviceType: 'Electrical',
-    address: 'Colombo 07',
-    description: 'Fix living room lights',
-    scheduledAt: DateTime(2026, 4, 17, 14, 0),
-    status: 'pending',
-    createdAt: DateTime(2026, 4, 16),
-  ),
-  Booking(
-    id: 3,
-    customerId: 2, // Saman
-    serviceType: 'Plumbing',
-    address: 'Nugegoda',
-    description: 'Bathroom tap replacement',
-    scheduledAt: DateTime(2026, 4, 18, 9, 0),
-    status: 'pending',
-    createdAt: DateTime(2026, 4, 16),
-  ),
-  Booking(
-    id: 4,
-    customerId: 2, // Saman
-    providerId: 5, // Ruwan
-    serviceType: 'AC Repair',
-    address: 'Dehiwala Station Road',
-    description: 'AC unit not cooling properly',
-    scheduledAt: DateTime(2026, 4, 19, 11, 0),
-    status: 'accepted',
-    price: 4200.0,
-    createdAt: DateTime(2026, 4, 16),
-  ),
-];
+/// Swap this for an API version when the backend is ready.
+final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
+  return InMemoryBookingRepository();
+});
 
 // ── Main bookings provider ────────────────────────────────────────────────────
 
 final bookingsProvider =
     StateNotifierProvider<BookingsNotifier, List<Booking>>((ref) {
-  return BookingsNotifier();
+  return BookingsNotifier(ref, ref.watch(bookingRepositoryProvider));
 });
 
 class BookingsNotifier extends StateNotifier<List<Booking>> {
-  BookingsNotifier() : super(_initialBookings);
+  final Ref _ref;
+  final BookingRepository _repository;
 
-  int _nextId = 5;
-
-  void createBooking(Booking booking) {
-    final newBooking = Booking(
-      id: _nextId++,
-      customerId: booking.customerId,
-      providerId: booking.providerId,
-      serviceType: booking.serviceType,
-      address: booking.address,
-      description: booking.description,
-      scheduledAt: booking.scheduledAt,
-      status: 'pending',
-      price: booking.price,
-      createdAt: DateTime.now(),
-    );
-    state = [...state, newBooking];
+  BookingsNotifier(this._ref, this._repository) : super(const []) {
+    _refresh();
   }
 
-  void acceptBooking(int bookingId, int providerId, double price) {
-    state = [
-      for (final b in state)
-        if (b.id == bookingId)
-          b.copyWith(
-            providerId: providerId,
-            price: price,
-            status: 'accepted',
-          )
-        else
-          b,
-    ];
+  Future<void> _refresh() async {
+    final bookings = await _repository.fetchBookings();
+    if (mounted) state = bookings;
   }
 
-  void declineBooking(int bookingId) {
-    // No state change — booking stays pending for another provider
+  Future<void> createBooking(Booking booking) async {
+    await _repository.createBooking(booking);
+    await _refresh();
   }
 
-  void startJob(int bookingId) {
-    state = [
-      for (final b in state)
-        if (b.id == bookingId) b.copyWith(status: 'inProgress') else b,
-    ];
+  /// Returns false if the job is no longer available.
+  Future<bool> acceptBooking(int bookingId, int providerId, double price) async {
+    final accepted =
+        await _repository.acceptBooking(bookingId, providerId, price);
+    await _refresh();
+    return accepted;
   }
 
-  void completeJob(int bookingId) {
-    state = [
-      for (final b in state)
-        if (b.id == bookingId) b.copyWith(status: 'completed') else b,
-    ];
+  /// Hides the booking from this provider. It stays open for other providers.
+  Future<bool> declineBooking(int bookingId, int providerId) async {
+    final declined = await _repository.declineBooking(bookingId, providerId);
+    await _refresh();
+    return declined;
   }
 
-  void cancelBooking(int bookingId) {
-    state = state
-        .where((b) => !(b.id == bookingId && b.status == 'pending'))
-        .toList();
+  Future<bool> startJob(int bookingId) async {
+    final started = await _repository.startJob(bookingId);
+    await _refresh();
+    return started;
+  }
+
+  /// Completes the job and adds its price to the provider's earnings.
+  Future<bool> completeJob(int bookingId) async {
+    final completed = await _repository.completeJob(bookingId);
+    await _refresh();
+    if (completed == null) return false;
+
+    final providerId = completed.providerId;
+    final price = completed.price;
+    if (providerId != null && price != null) {
+      await _ref.read(usersProvider.notifier).addEarnings(providerId, price);
+    }
+    return true;
+  }
+
+  /// Marks a pending booking as cancelled. The record is kept.
+  Future<bool> cancelBooking(int bookingId) async {
+    final cancelled = await _repository.cancelBooking(bookingId);
+    await _refresh();
+    return cancelled;
   }
 }
 
@@ -133,13 +94,15 @@ final activeBookingsProvider =
   }).toList();
 });
 
-// Args: (serviceType, areaCovered)
+// Args: (providerId, serviceType, areaCovered, isOnline)
 final providerIncomingJobsProvider =
-    Provider.family<List<Booking>, (String, String)>((ref, args) {
-  final (serviceType, areaCovered) = args;
+    Provider.family<List<Booking>, (int, String, String, bool)>((ref, args) {
+  final (providerId, serviceType, areaCovered, isOnline) = args;
+  if (!isOnline) return const [];
   return ref.watch(bookingsProvider).where((b) {
     return b.status == 'pending' &&
         b.providerId == null &&
+        !b.declinedBy.contains(providerId) &&
         b.serviceType == serviceType &&
         b.address.toLowerCase().contains(areaCovered.toLowerCase());
   }).toList();

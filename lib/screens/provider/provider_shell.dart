@@ -51,14 +51,14 @@ class _BottomNav extends StatelessWidget {
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.work_outline),
-            activeIcon: Icon(Icons.work),
-            label: 'Jobs',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.inbox_outlined),
             activeIcon: Icon(Icons.inbox),
             label: 'Requests',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.work_outline),
+            activeIcon: Icon(Icons.work),
+            label: 'My Jobs',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),

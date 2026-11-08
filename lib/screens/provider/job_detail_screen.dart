@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/bookings_provider.dart';
 import '../../providers/users_provider.dart';
 import '../../theme/app_colors.dart';
@@ -128,53 +127,20 @@ class JobDetailScreen extends ConsumerWidget {
   Widget _actionArea(
       BuildContext context, WidgetRef ref, String status) {
     switch (status) {
-      case 'pending':
-        return Row(
-          children: [
-            Expanded(
-              child: _primaryBtn(
-                context,
-                label: 'Accept Job',
-                color: Colors.amber,
-                textColor: Colors.black,
-                onPressed: () =>
-                    _showAcceptDialog(context, ref, bookingId),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _outlineBtn(
-                context,
-                label: 'Decline',
-                onPressed: () {
-                  ref
-                      .read(bookingsProvider.notifier)
-                      .declineBooking(bookingId);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Declined.',
-                        style:
-                            TextStyle(color: AppColors.textPrimary),
-                      ),
-                      backgroundColor: AppColors.statusPendingBg,
-                    ),
-                  );
-                  context.pop();
-                },
-              ),
-            ),
-          ],
-        );
-
       case 'accepted':
         return _primaryBtn(
           context,
           label: 'Mark as Started',
           color: AppColors.primary,
-          onPressed: () {
-            ref.read(bookingsProvider.notifier).startJob(bookingId);
-            _snack(context, 'Job marked as started!', AppColors.primary);
+          onPressed: () async {
+            final started =
+                await ref.read(bookingsProvider.notifier).startJob(bookingId);
+            if (!context.mounted) return;
+            _snack(
+              context,
+              started ? 'Job marked as started!' : 'Could not start this job.',
+              started ? AppColors.primary : AppColors.error,
+            );
           },
         );
 
@@ -182,13 +148,17 @@ class JobDetailScreen extends ConsumerWidget {
         return _primaryBtn(
           context,
           label: 'Mark as Completed',
-          color: AppColors.statusCompleted,
-          onPressed: () {
-            ref
+          color: AppColors.success,
+          onPressed: () async {
+            final completed = await ref
                 .read(bookingsProvider.notifier)
                 .completeJob(bookingId);
-            _snack(context, 'Job completed!',
-                AppColors.statusCompleted);
+            if (!context.mounted) return;
+            _snack(
+              context,
+              completed ? 'Job completed!' : 'Could not complete this job.',
+              completed ? AppColors.success : AppColors.error,
+            );
           },
         );
 
@@ -226,74 +196,6 @@ class JobDetailScreen extends ConsumerWidget {
     }
   }
 
-  void _showAcceptDialog(
-      BuildContext context, WidgetRef ref, int id) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('Set Job Price',
-            style: TextStyle(color: AppColors.textPrimary)),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'e.g. 3500',
-            hintStyle:
-                const TextStyle(color: AppColors.textSecondary),
-            prefixText: 'Rs. ',
-            prefixStyle:
-                const TextStyle(color: AppColors.textSecondary),
-            filled: true,
-            fillColor: AppColors.background,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: AppColors.primary, width: 1.5),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style:
-                    TextStyle(color: AppColors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () {
-              final price = double.tryParse(ctrl.text);
-              if (price == null) return;
-              final user = ref.read(currentUserProvider);
-              if (user == null) return;
-              ref
-                  .read(bookingsProvider.notifier)
-                  .acceptBooking(id, user.id, price);
-              Navigator.pop(ctx);
-              _snack(context, 'Job accepted!',
-                  const Color(0xFF1B8A6B));
-            },
-            child: const Text('Confirm',
-                style: TextStyle(
-                    color: AppColors.statusInProgress)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _primaryBtn(
     BuildContext context, {
     required String label,
@@ -322,29 +224,6 @@ class JobDetailScreen extends ConsumerWidget {
         ),
       );
 
-  Widget _outlineBtn(
-    BuildContext context, {
-    required String label,
-    required VoidCallback onPressed,
-  }) =>
-      SizedBox(
-        height: 50,
-        child: OutlinedButton(
-          onPressed: onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.textSecondary,
-            side: const BorderSide(color: AppColors.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Text(
-            label,
-            style:
-                const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-        ),
-      );
 
   void _snack(BuildContext context, String msg, Color bg) {
     ScaffoldMessenger.of(context)
